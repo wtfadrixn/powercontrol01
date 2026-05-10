@@ -58,7 +58,7 @@
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
 html{height:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
 body{background:var(--bg);color:var(--t1);font-family:var(--fB);min-height:100%;overflow-x:hidden;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none;}
-body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(59,142,240,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(59,142,240,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(59,142,240,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(59,142,240,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;touch-action:none;}
 
 /* LAYOUT */
 .app{display:flex;min-height:100vh;position:relative;z-index:1;}
@@ -96,9 +96,9 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .hbtn{background:rgba(255,255,255,0.06);border:1px solid var(--brd);border-radius:8px;width:38px;height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 .hbtn span{display:block;width:18px;height:2px;background:var(--t1);border-radius:2px;}
 
-/* OVERLAY — use opacity+pointer-events, NOT display:none toggle */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:350;opacity:0;pointer-events:none;transition:opacity .28s;}
-.overlay.open{opacity:1;pointer-events:all;}
+/* OVERLAY — visibility+pointer-events para compatibilidade com WebView Android */
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:350;opacity:0;pointer-events:none;visibility:hidden;transition:opacity .28s,visibility .28s;-webkit-tap-highlight-color:transparent;}
+.overlay.open{opacity:1;pointer-events:auto;visibility:visible;}
 
 /* MAIN */
 .main{margin-left:var(--sw);flex:1;padding:28px;min-height:100vh;min-width:0;-webkit-overflow-scrolling:touch;}
@@ -577,18 +577,36 @@ let curPer='dia', curHist='todos';
 // ── SIDEBAR / OVERLAY ──
 const sidebar=document.getElementById('sidebar');
 const overlay=document.getElementById('overlay');
-document.getElementById('hbtn').addEventListener('click',()=>{
-  const open=sidebar.classList.toggle('open');
-  overlay.classList.toggle('open',open);
-});
-overlay.addEventListener('click',()=>{
+
+function openSidebar(){
+  sidebar.classList.add('open');
+  overlay.classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeSidebar(){
   sidebar.classList.remove('open');
   overlay.classList.remove('open');
-});
+  document.body.style.overflow='';
+}
+function toggleSidebar(){
+  if(sidebar.classList.contains('open')) closeSidebar(); else openSidebar();
+}
+
+// Suporte a click E touchstart para WebView Android (AppGeyser)
+function addTap(el, fn){
+  el.addEventListener('click', fn);
+  el.addEventListener('touchstart', function(e){
+    e.preventDefault(); // evita o delay de 300ms e duplo disparo
+    fn(e);
+  }, {passive:false});
+}
+
+addTap(document.getElementById('hbtn'), toggleSidebar);
+addTap(overlay, closeSidebar);
 
 // ── NAVIGATION ──
 document.querySelectorAll('.nav-item[data-p]').forEach(el=>{
-  el.addEventListener('click',()=>showPage(el.dataset.p));
+  addTap(el, ()=>showPage(el.dataset.p));
 });
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -596,8 +614,7 @@ function showPage(id){
   document.getElementById('page-'+id).classList.add('active');
   const ni=document.querySelector('.nav-item[data-p="'+id+'"]');
   if(ni)ni.classList.add('active');
-  sidebar.classList.remove('open');
-  overlay.classList.remove('open');
+  closeSidebar();
   window.scrollTo(0,0);
   ({dashboard:renderDash,gastos:renderGT,servicos:renderST,financeiro:renderFin,comparacoes:renderCmp,estatisticas:renderEst,historico:renderHist})[id]?.();
 }
